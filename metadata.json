@@ -1,0 +1,6 @@
+
+{
+  "name": "Gemini Burger - Order via WhatsApp",
+  "description": "A premium burger ordering system with AI-powered suggestions and direct WhatsApp checkout integration.",
+  "requestFramePermissions": ["geolocation"]
+}

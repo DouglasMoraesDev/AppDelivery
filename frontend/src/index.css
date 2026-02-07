@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  /* Configurações customizadas aqui se necessário */
+}
+
+/* Forçar cor preta em todas as labels para melhor legibilidade */
+label {
+  color: #111827 !important;
+  font-weight: 600 !important;
+}
+
+/* Garantir que inputs e textareas tenham texto preto */
+input, textarea, select {
+  color: #111827 !important;
+}
+
+/* Garantir contraste em placeholders */
+input::placeholder, textarea::placeholder {
+  color: #6B7280 !important;
+  opacity: 0.7;
+}

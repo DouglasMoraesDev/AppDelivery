@@ -1,0 +1,357 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// SISTEMA MULTI-TENANT - MODELO COMPLETO
+// ============================================
+
+// Planos de Assinatura
+model Plan {
+  id          String   @id @default(uuid())
+  name        String   // "Basic", "Pro", "Enterprise"
+  price       Decimal  @db.Decimal(10, 2)
+  maxProducts Int      @default(50)
+  maxOrders   Int      @default(500) // por mês
+  features    Json     // ["ai_suggestions", "analytics", "custom_domain"]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+// Tenant (Cliente/Restaurante)
+model Tenant {
+  id           String    @id @default(uuid())
+  slug         String    @unique // geminiburger, xburger, etc
+  businessName String    // Nome do estabelecimento
+  email        String    @unique
+  phone        String
+  whatsappNumber String
+  
+  // Configurações visuais
+  logo         String?
+  banner       String?
+  primaryColor String    @default("#ea580c") // orange-600
+  secondaryColor String  @default("#18181b") // zinc-950
+  accentColor  String    @default("#f97316") // orange-500
+  textColor    String    @default("#ffffff") // white
+  bgColor      String    @default("#0a0a0a") // dark background
+  
+  // Endereço
+  zipCode      String?
+  street       String?
+  number       String?
+  district     String?
+  city         String
+  state        String
+  
+  // Horário de funcionamento
+  schedule     Json      // { "monday": { "open": "18:00", "close": "23:00" }, ... }
+  isOpen       Boolean   @default(true)
+  
+  // Plano e Status
+  planId       String
+  plan         Plan      @relation(fields: [planId], references: [id])
+  status       TenantStatus @default(TRIAL)
+  trialEndsAt  DateTime?
+  
+  // Configurações da IA
+  geminiApiKey String?
+  aiEnabled    Boolean   @default(true)
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  users        User[]
+  categories   Category[]
+  products     Product[]
+  orders       Order[]
+  customers    Customer[]
+  coupons      Coupon[]
+  analytics    Analytics[]
+
+  @@map("tenants")
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+// Usuários (admins do restaurante)
+model User {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name      String
+  email     String
+  password  String   // hash bcrypt
+  role      UserRole @default(ADMIN)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+}
+
+// Categorias do Cardápio
+model Category {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name        String
+  slug        String
+  icon        String?
+  order       Int       @default(0)
+  active      Boolean   @default(true)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  products    Product[]
+  
+  @@unique([tenantId, slug])
+  @@map("categories")
+}
+
+// Produtos do Cardápio
+model Product {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  
+  name        String
+  slug        String
+  description String    @db.Text
+  price       Decimal   @db.Decimal(10, 2)
+  image       String?
+  tags        Json?     // ["Best Seller", "Promoção"]
+  
+  // Estoque e disponibilidade
+  available   Boolean   @default(true)
+  stock       Int?      // null = ilimitado
+  
+  // Nutrição
+  calories    Int?
+  ingredients Json?     // ["Carne 180g", "Queijo cheddar", ...]
+  allergens   Json?     // ["Glúten", "Lactose"]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  orderItems  OrderItem[]
+  
+  @@unique([tenantId, slug])
+  @@index([tenantId, categoryId])
+  @@map("products")
+}
+
+// Clientes (compradores)
+model Customer {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name      String
+  phone     String
+  email     String?
+  
+  // Endereços salvos
+  addresses Json?    // [{ street, number, district, zipCode, complement }]
+  
+  // Estatísticas
+  totalOrders Int    @default(0)
+  totalSpent  Decimal @db.Decimal(10, 2) @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  orders    Order[]
+  
+  @@unique([tenantId, phone])
+  @@map("customers")
+}
+
+// Pedidos
+model Order {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  customerId  String
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  
+  orderNumber String      // #001, #002, etc
+  
+  // Detalhes do pedido
+  items       OrderItem[]
+  total       Decimal     @db.Decimal(10, 2)
+  
+  // Tipo
+  type        OrderType   // DELIVERY ou PICKUP
+  
+  // Endereço de entrega (se delivery)
+  deliveryAddress Json?   // { street, number, district, zipCode, complement, coords }
+  
+  // Pagamento
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+  
+  // Status do pedido
+  status      OrderStatus @default(PENDING)
+  
+  // Observações
+  notes       String?     @db.Text
+  
+  // Cupom aplicado
+  couponId    String?
+  coupon      Coupon?     @relation(fields: [couponId], references: [id])
+  discount    Decimal?    @db.Decimal(10, 2)
+  
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  confirmedAt DateTime?
+  deliveredAt DateTime?
+  cancelledAt DateTime?
+  
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("orders")
+}
+
+enum OrderType {
+  DELIVERY
+  PICKUP
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum OrderStatus {
+  PENDING       // Aguardando confirmação
+  CONFIRMED     // Confirmado pelo restaurante
+  PREPARING     // Em preparo
+  READY         // Pronto (para retirada) ou Saiu para entrega
+  DELIVERED     // Entregue
+  CANCELLED     // Cancelado
+}
+
+// Itens do Pedido
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2) // preço no momento da compra
+  subtotal  Decimal @db.Decimal(10, 2)
+  
+  notes     String? // "Sem cebola", "Ponto mal passado"
+  
+  @@map("order_items")
+}
+
+// Cupons de Desconto
+model Coupon {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  code        String
+  description String?
+  
+  // Tipo de desconto
+  type        CouponType
+  value       Decimal  @db.Decimal(10, 2) // % ou R$
+  
+  // Validade
+  validFrom   DateTime
+  validUntil  DateTime
+  
+  // Limites
+  maxUses     Int?     // null = ilimitado
+  usedCount   Int      @default(0)
+  minOrder    Decimal? @db.Decimal(10, 2) // valor mínimo do pedido
+  
+  active      Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  orders      Order[]
+  
+  @@unique([tenantId, code])
+  @@map("coupons")
+}
+
+enum CouponType {
+  PERCENTAGE  // 10% de desconto
+  FIXED       // R$ 10,00 de desconto
+  FREE_DELIVERY // Frete grátis
+}
+
+// Analytics e Métricas
+model Analytics {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @db.Date
+  
+  // Métricas diárias
+  totalOrders Int      @default(0)
+  totalRevenue Decimal @db.Decimal(10, 2) @default(0)
+  avgOrderValue Decimal @db.Decimal(10, 2) @default(0)
+  
+  newCustomers Int     @default(0)
+  returningCustomers Int @default(0)
+  
+  // Produtos mais vendidos
+  topProducts Json?   // [{ productId, name, quantity }]
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+  @@map("analytics")
+}
