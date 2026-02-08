@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   Settings, Store, Palette, MapPin, Image, Save, LogOut, 
   Package, ShoppingBag, Users, TrendingUp, Edit2, Trash2, 
-  Plus, X, Upload, Eye, Clock, CheckCircle, XCircle, FileText 
+  Plus, X, Upload, Eye, Clock, CheckCircle, XCircle, FileText,
+  FolderPlus, Tag
 } from 'lucide-react';
 import ProductModal from './ProductModal';
 import ReportsTab from './ReportsTab';
+import * as api from '../services/api';
 
 interface Product {
   id: string;
@@ -21,6 +23,7 @@ interface Category {
   id: string;
   name: string;
   slug: string;
+  icon?: string;
 }
 
 interface Config {
@@ -73,7 +76,7 @@ interface Order {
 }
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'config' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'categories' | 'config' | 'reports'>('overview');
   const [config, setConfig] = useState<Config | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -85,6 +88,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  
+  // Categorias
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', icon: '' });
   
   // Reports
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -100,308 +108,148 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   });
 
   useEffect(() => {
-    // Verificar se está em modo demo
-    const isDemoMode = localStorage.getItem('adminToken')?.includes('demo-token');
-    
-    if (isDemoMode) {
-      // Carregar dados de demonstração
-      setConfig({
-        businessName: 'Gemini Burger Demo',
-        phone: '(11) 99999-9999',
-        whatsappNumber: '5511999999999',
-        primaryColor: '#ea580c',
-        secondaryColor: '#dc2626',
-        accentColor: '#f59e0b',
-        textColor: '#ffffff',
-        bgColor: '#18181b',
-        city: 'São Paulo',
-        state: 'SP',
-        isOpen: true,
-      });
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    try {
+      // Verificar se há token válido
+      const token = localStorage.getItem('adminToken');
       
-      setCategories([
-        { id: '1', name: 'Hambúrgueres', slug: 'burgers' },
-        { id: '2', name: 'Acompanhamentos', slug: 'sides' },
-        { id: '3', name: 'Bebidas', slug: 'drinks' },
-        { id: '4', name: 'Sobremesas', slug: 'desserts' },
-        { id: '5', name: 'Combos', slug: 'combos' },
-        { id: '6', name: 'Bebidas Alcoólicas', slug: 'alcohol' },
-      ]);
-      
-      // Produtos de demonstração - usando os produtos originais do constants/index.ts
-      const mockProducts: Product[] = [
-        // COMBOS
-        {
-          id: 'c1',
-          name: 'Combo Individual Prime',
-          description: '1 Gemini Prime + 1 Batata Rústica Individual + 1 Refrigerante Lata.',
-          price: 58.00,
-          categoryId: '5',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'c2',
-          name: 'Combo Casal Smash',
-          description: '2 Super Flash Smash + 1 Batata Rústica Grande + 2 Refrigerantes Lata.',
-          price: 89.90,
-          categoryId: '5',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'c3',
-          name: 'Combo Família Monster',
-          description: '4 Burgers (2 Prime, 2 Smash) + 2 Porções de Batata + 1 Coca-Cola 2L.',
-          price: 159.00,
-          categoryId: '5',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&q=80&w=800'
-        },
-        // BURGERS
-        {
-          id: 'b1',
-          name: 'Gemini Prime',
-          description: 'Blend bovino 180g, queijo cheddar artesanal, cebola caramelizada e maionese trufada no pão brioche.',
-          price: 38.90,
-          categoryId: '1',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'b6',
-          name: 'Truffle Gorgonzola',
-          description: 'Hambúrguer 180g, creme de gorgonzola premium, mel trufado e rúcula fresca.',
-          price: 45.00,
-          categoryId: '1',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1512152272829-e3139592d56f?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'b7',
-          name: 'Monster Double Stack',
-          description: 'Dois burgers de 180g, quatro fatias de cheddar, bacon duplo e pão australiano.',
-          price: 52.00,
-          categoryId: '1',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1586816001966-79b736744398?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'b2',
-          name: 'Super Flash Smash',
-          description: 'Dois burgers smash 90g, double cheddar, picles da casa e molho especial.',
-          price: 29.90,
-          categoryId: '1',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&q=80&w=800'
-        },
-        // SIDES
-        {
-          id: 's1',
-          name: 'Batata Rústica Grande',
-          description: 'Batatas com casca temperadas com alecrim, páprica e sal grosso. Acompanha maionese verde.',
-          price: 22.00,
-          categoryId: '2',
-          available: true,
-          image: 'https://png.pngtree.com/png-vector/20250813/ourlarge/pngtree-golden-brown-rustic-potato-wedges-served-with-spices-on-vivid-orange-png-image_16719846.png'
-        },
-        {
-          id: 's4',
-          name: 'Batata com Cheddar e Bacon',
-          description: 'Nossa batata rústica coberta com muito molho cheddar e farofa de bacon.',
-          price: 28.00,
-          categoryId: '2',
-          available: true,
-          image: '/batata-com-cheddar.png'
-        },
-        // DRINKS
-        {
-          id: 'd3',
-          name: 'Coca-Cola 350ml',
-          description: 'Lata gelada.',
-          price: 7.00,
-          categoryId: '3',
-          available: true,
-          image: '/02.png'
-        },
-        {
-          id: 'd6',
-          name: 'Água Mineral c/ Gás',
-          description: 'Garrafa 500ml gelada com rodelas de limão.',
-          price: 5.00,
-          categoryId: '3',
-          available: true,
-          image: '/agua.jpg'
-        },
-        // ALCOHOLIC DRINKS
-        {
-          id: 'a1',
-          name: 'Chopp IPA Artesanal',
-          description: 'Copo de 500ml. Cerveja encorpada com notas cítricas e amargor marcante.',
-          price: 24.00,
-          categoryId: '6',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1535958636474-b021ee887b13?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'a2',
-          name: 'Gin Tônica Clássica',
-          description: 'Gin premium, tônica, zimbro e uma rodela de limão siciliano.',
-          price: 28.00,
-          categoryId: '6',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1547595628-c61a29f496f0?auto=format&fit=crop&q=80&w=800'
-        },
-        {
-          id: 'a3',
-          name: 'Heineken Long Neck',
-          description: 'Cerveja Premium Lager 330ml gelada.',
-          price: 12.00,
-          categoryId: '6',
-          available: true,
-          image: '/heineken.png'
-        },
-        {
-          id: 'a4',
-          name: 'Caipirinha de Morango',
-          description: 'Morangos frescos, açúcar e cachaça premium ou vodka.',
-          price: 22.00,
-          categoryId: '6',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1536935338788-846bb9981813?auto=format&fit=crop&q=80&w=800'
-        },
-        // DESSERTS
-        {
-          id: 'e1',
-          name: 'Milkshake Nutella',
-          description: 'Sorvete de baunilha, muita Nutella e chantilly artesanal.',
-          price: 24.00,
-          categoryId: '4',
-          available: true,
-          image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&q=80&w=800'
-        }
-      ];
-      // Forçar atualização IMEDIATA dos produtos - sempre sobrescrever localStorage
-      console.log('📦 Atualizando produtos no localStorage...', mockProducts.length, 'produtos');
-      localStorage.setItem('demoProducts', JSON.stringify(mockProducts));
-      localStorage.setItem('productsVersion', '3.0'); // Incrementar versão para forçar reload
-      setProducts(mockProducts);
-      
-      // Disparar evento para App.tsx detectar
-      window.dispatchEvent(new Event('storage'));
-      
-      setStats({
-        totalOrders: 150,
-        totalRevenue: 12500.00,
-        pendingOrders: 5,
-        totalProducts: mockProducts.length,
-      });
-      
-      // Dados de pedidos para demonstração
-      const mockOrders: Order[] = [
-        {
-          id: '1',
-          orderNumber: '#001',
-          customerName: 'João Silva',
-          phone: '(11) 98765-4321',
-          total: 89.90,
-          status: 'PENDING',
-          type: 'DELIVERY',
-          paymentMethod: 'PIX',
-          createdAt: new Date().toISOString(),
-          items: [
-            { id: '1', productName: 'Gemini Prime', quantity: 2, price: 38.90, subtotal: 77.80 },
-            { id: '2', productName: 'Batata Rústica', quantity: 1, price: 12.10, subtotal: 12.10 }
-          ],
-          deliveryAddress: {
-            street: 'Rua das Flores',
-            number: '123',
-            district: 'Centro',
-            city: 'São Paulo'
-          }
-        },
-        {
-          id: '2',
-          orderNumber: '#002',
-          customerName: 'Maria Santos',
-          phone: '(11) 91234-5678',
-          total: 159.00,
-          status: 'CONFIRMED',
-          type: 'DELIVERY',
-          paymentMethod: 'CREDIT_CARD',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          items: [
-            { id: '1', productName: 'Combo Família Monster', quantity: 1, price: 159.00, subtotal: 159.00 }
-          ],
-          deliveryAddress: {
-            street: 'Av. Paulista',
-            number: '1000',
-            district: 'Bela Vista',
-            city: 'São Paulo'
-          }
-        },
-        {
-          id: '3',
-          orderNumber: '#003',
-          customerName: 'Pedro Oliveira',
-          phone: '(11) 99876-5432',
-          total: 58.00,
-          status: 'READY',
-          type: 'PICKUP',
-          paymentMethod: 'CASH',
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-          items: [
-            { id: '1', productName: 'Combo Individual Prime', quantity: 1, price: 58.00, subtotal: 58.00 }
-          ]
-        }
-      ];
-      
-      // Carregar pedidos reais do localStorage
-      const savedOrders = JSON.parse(localStorage.getItem('demoOrders') || '[]');
-      
-      // Se houver pedidos reais, usá-los; senão, usar mock
-      const ordersToUse = savedOrders.length > 0 ? savedOrders : mockOrders;
-      setOrders(ordersToUse);
-      
-      // Atualizar estatísticas com pedidos reais
-      if (savedOrders.length > 0) {
-        const totalRevenue = savedOrders.reduce((sum: number, order: any) => sum + order.total, 0);
-        const pendingCount = savedOrders.filter((order: any) => order.status === 'pending').length;
-        setStats({
-          totalOrders: savedOrders.length,
-          totalRevenue,
-          pendingOrders: pendingCount,
-          totalProducts: mockProducts.length,
-        });
+      // Se não há token ou é token demo, usar modo demo
+      if (!token || token.includes('demo-token')) {
+        console.log('🔄 Carregando modo demonstração...');
+        loadDemoData();
+        return;
       }
       
-      console.log('✅ Modo demonstração ativado - dados mockados carregados');
-      
-      // Listener para atualizar pedidos em tempo real
-      const orderUpdateInterval = setInterval(() => {
-        const currentOrders = JSON.parse(localStorage.getItem('demoOrders') || '[]');
-        if (currentOrders.length > 0) {
-          setOrders(currentOrders);
-          const totalRevenue = currentOrders.reduce((sum: number, order: any) => sum + order.total, 0);
-          const pendingCount = currentOrders.filter((order: any) => order.status === 'pending').length;
-          setStats((prev) => ({
-            ...prev,
-            totalOrders: currentOrders.length,
-            totalRevenue,
-            pendingOrders: pendingCount,
-          }));
-        }
-      }, 3000); // Verifica a cada 3 segundos
-      
-      return () => clearInterval(orderUpdateInterval);
-    } else {
-      loadConfig();
-      loadProducts();
-      loadCategories();
-      loadStats();
-      loadOrders();
+      console.log('🔄 Carregando dados reais do backend...');
+      // Tentar carregar dados reais do backend
+      const [categoriesData, productsData, ordersData, configData, statsData] = await Promise.all([
+        api.getCategories(),
+        api.getProducts(),
+        api.getOrders(),
+        api.getConfig(),
+        api.getDashboardStats()
+      ]);
+
+      console.log('✅ Dados reais carregados:', { categoriesData, productsData, ordersData });
+      setCategories(categoriesData);
+      setProducts(productsData);
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
+      setConfig(configData);
+      setStats(statsData);
+    } catch (error) {
+      console.error('❌ Erro ao carregar dados:', error);
+      // Em caso de erro, usar modo demo
+      console.log('⚠️ Erro na API, usando modo demonstração');
+      loadDemoData();
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  };
+
+  const loadDemoData = () => {
+    // Configuração padrão
+    const demoConfig = {
+      businessName: 'Gemini Burger - Demo',
+      phone: '(11) 99999-9999',
+      whatsappNumber: '5511999999999',
+      logo: null,
+      banner: null,
+      primaryColor: '#ea580c',
+      secondaryColor: '#18181b',
+      accentColor: '#f97316',
+      textColor: '#ffffff',
+      bgColor: '#0a0a0a',
+      isOpen: true
+    };
+
+    // Produtos demo
+    const demoProducts = [
+      { id: '1', name: 'Gemini Prime', price: 38.90, category: 'Burgers', available: true },
+      { id: '2', name: 'Super Flash Smash', price: 29.90, category: 'Burgers', available: true },
+      { id: '3', name: 'Batata Rústica', price: 22.00, category: 'Acompanhamentos', available: true },
+    ];
+
+    // Categorias demo
+    const demoCategories = [
+      { id: '1', name: 'Burgers', slug: 'burgers', icon: '🍔', active: true },
+      { id: '2', name: 'Acompanhamentos', slug: 'sides', icon: '🍟', active: true },
+      { id: '3', name: 'Bebidas', slug: 'drinks', icon: '🥤', active: true },
+    ];
+
+    const mockOrders: Order[] = [
+          {
+            id: '1',
+            orderNumber: '#001',
+            customerName: 'João Silva',
+            phone: '(11) 98765-4321',
+            total: 89.90,
+            status: 'PENDING',
+            type: 'DELIVERY',
+            paymentMethod: 'PIX',
+            createdAt: new Date().toISOString(),
+            items: [
+              { id: '1', productName: 'Gemini Prime', quantity: 2, price: 38.90, subtotal: 77.80 },
+              { id: '2', productName: 'Batata Rústica', quantity: 1, price: 12.10, subtotal: 12.10 }
+            ],
+            deliveryAddress: {
+              street: 'Rua das Flores',
+              number: '123',
+              district: 'Centro',
+              city: 'São Paulo'
+            }
+          },
+          {
+            id: '2',
+            orderNumber: '#002',
+            customerName: 'Maria Santos',
+            phone: '(11) 91234-5678',
+            total: 159.00,
+            status: 'CONFIRMED',
+            type: 'DELIVERY',
+            paymentMethod: 'CREDIT_CARD',
+            createdAt: new Date(Date.now() - 3600000).toISOString(),
+            items: [
+              { id: '1', productName: 'Combo Família Monster', quantity: 1, price: 159.00, subtotal: 159.00 }
+            ],
+            deliveryAddress: {
+              street: 'Av. Paulista',
+              number: '1000',
+              district: 'Bela Vista',
+              city: 'São Paulo'
+            }
+          }
+        ];
+
+    // Carregar configuração do localStorage ou usar padrão
+    const savedConfig = localStorage.getItem('demoConfig');
+    setConfig(savedConfig ? JSON.parse(savedConfig) : demoConfig);
+    
+    // Definir produtos e categorias
+    setProducts(demoProducts);
+    setCategories(demoCategories);
+        
+    // Carregar pedidos do localStorage ou usar mock
+    const savedOrders = JSON.parse(localStorage.getItem('demoOrders') || '[]');
+    const ordersToUse = savedOrders.length > 0 ? savedOrders : mockOrders;
+    setOrders(ordersToUse);
+    
+    // Calcular estatísticas
+    const totalRevenue = ordersToUse.reduce((sum: number, order: any) => sum + (order.total || 0), 0);
+    const pendingCount = ordersToUse.filter((order: any) => order.status === 'PENDING').length;
+    
+    setStats({
+      totalOrders: ordersToUse.length,
+      totalRevenue,
+      pendingOrders: pendingCount,
+      totalProducts: demoProducts.length,
+    });
+    
+    console.log('✅ Modo demonstração ativado - dados carregados');
+  };
 
   useEffect(() => {
     if (activeTab === 'reports') {
@@ -429,7 +277,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         { name: 'Super Flash Smash', quantity: 38, revenue: 1136.20 },
         { name: 'Combo Família Monster', quantity: 25, revenue: 3975.00 },
       ],
-      orders: orders.map((order, idx) => ({
+      orders: (orders || []).map((order, idx) => ({
         ...order,
         createdAt: new Date(now.getTime() - idx * 3600000 * 12).toISOString()
       })),
@@ -585,18 +433,38 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return;
       }
       
+      // Filtrar apenas campos válidos para o backend
+      const validFields = ['businessName', 'phone', 'whatsappNumber', 'logo', 'banner', 'primaryColor', 'secondaryColor', 'accentColor', 'textColor', 'bgColor', 'zipCode', 'street', 'number', 'district', 'city', 'state', 'isOpen'];
+      const configToSend: any = {};
+      
+      for (const field of validFields) {
+        if (field in config) {
+          configToSend[field] = (config as any)[field];
+        }
+      }
+      
+      console.log('📤 Salvando configurações:', configToSend);
+      
       const response = await fetch('/api/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(config),
+        body: JSON.stringify(configToSend),
       });
       
+      console.log('📊 Status resposta:', response.status);
+      
       if (response.ok) {
-        localStorage.setItem('demoConfig', JSON.stringify(config));
+        const responseData = await response.json();
+        console.log('✅ Configuração salva:', responseData);
+        localStorage.setItem('demoConfig', JSON.stringify(responseData));
         alert('Configurações salvas com sucesso!');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Erro ao salvar:', errorData);
+        alert(`Erro ao salvar: ${errorData.error || 'Erro desconhecido'}`);
       }
     } catch (error) {
       console.error('Erro ao salvar configurações:', error);
@@ -607,42 +475,132 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   const handleImageUpload = async (type: 'logo' | 'banner', file: File) => {
-    // Simular upload - em produção, usar um serviço real
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const imageUrl = reader.result as string;
-      setConfig(prev => prev ? { ...prev, [type]: imageUrl } : null);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Validar arquivo
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor, selecione uma imagem válida');
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Imagem muito grande. Máximo 5MB.');
+        return;
+      }
+      
+      // Criar FormData
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('type', type);
+      
+      const token = localStorage.getItem('adminToken');
+      
+      console.log(`📤 Enviando ${type} para upload...`);
+      
+      const response = await fetch('/api/config/upload-image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ ${type} enviado com sucesso:`, data);
+        setConfig(prev => prev ? { ...prev, [type]: data.url } : null);
+      } else {
+        const error = await response.json().catch(() => ({}));
+        console.error(`❌ Erro ao enviar ${type}:`, error);
+        alert(`Erro ao enviar ${type}: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error(`Erro ao fazer upload de ${type}:`, error);
+      alert(`Erro ao fazer upload: ${error}`);
+    }
+  };
+
+  // Funções para gerenciar categorias
+  const handleSaveCategory = async () => {
+    try {
+      if (editingCategory) {
+        await api.updateCategory(editingCategory.id, categoryForm);
+        setCategories(prev => prev.map(cat => 
+          cat.id === editingCategory.id ? { ...cat, ...categoryForm } : cat
+        ));
+      } else {
+        const newCategory = await api.createCategory(categoryForm);
+        setCategories(prev => [...prev, newCategory]);
+      }
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+      setCategoryForm({ name: '', slug: '', icon: '' });
+    } catch (error) {
+      console.error('Erro ao salvar categoria:', error);
+      alert('Erro ao salvar categoria');
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta categoria? Todos os produtos serão afetados.')) return;
+    
+    try {
+      await api.deleteCategory(id);
+      setCategories(prev => prev.filter(cat => cat.id !== id));
+    } catch (error) {
+      console.error('Erro ao excluir categoria:', error);
+      alert('Erro ao excluir categoria');
+    }
+  };
+
+  const openCategoryModal = (category?: Category) => {
+    if (category) {
+      setEditingCategory(category);
+      setCategoryForm({ name: category.name, slug: category.slug, icon: category.icon || '' });
+    } else {
+      setEditingCategory(null);
+      setCategoryForm({ name: '', slug: '', icon: '' });
+    }
+    setShowCategoryModal(true);
+  };
+
+  const handleSaveProduct = async (product: Product) => {
+    try {
+      console.log('💾 Salvando produto:', product);
+      
+      if (editingProduct) {
+        // Editando produto existente
+        console.log('✏️ Editando produto existente:', editingProduct.id);
+        const updatedProduct = await api.updateProduct(editingProduct.id, product);
+        setProducts(prev => prev.map(p => 
+          p.id === editingProduct.id ? updatedProduct : p
+        ));
+        console.log('✅ Produto editado com sucesso');
+      } else {
+        // Adicionando novo produto
+        console.log('➕ Adicionando novo produto');
+        const newProduct = await api.createProduct(product);
+        setProducts(prev => [...prev, newProduct]);
+        console.log('✅ Produto criado com sucesso');
+      }
+      
+      setShowProductModal(false);
+      setEditingProduct(null);
+      
+      // Atualizar stats
+      setStats(prev => ({ ...prev, totalProducts: products.length + (editingProduct ? 0 : 1) }));
+    } catch (error) {
+      console.error('❌ Erro ao salvar produto:', error);
+      alert(`Erro ao salvar produto: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
   };
 
   const deleteProduct = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este produto?')) return;
     
     try {
-      const token = localStorage.getItem('adminToken');
-      
-      // Modo demonstração
-      if (token?.includes('demo-token')) {
-        const updatedProducts = products.filter(p => p.id !== id);
-        setProducts(updatedProducts);
-        localStorage.setItem('demoProducts', JSON.stringify(updatedProducts));
-        console.log('✅ Produto excluído no modo demo');
-        alert('Produto excluído com sucesso!');
-        return;
-      }
-      
-      const response = await fetch(`/api/products/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (response.ok) {
-        setProducts(prev => prev.filter(p => p.id !== id));
-        alert('Produto excluído com sucesso!');
-      }
+      await api.deleteProduct(id);
+      setProducts(prev => prev.filter(p => p.id !== id));
+      alert('Produto excluído com sucesso!');
     } catch (error) {
       console.error('Erro ao excluir produto:', error);
       alert('Erro ao excluir produto');
@@ -651,33 +609,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const toggleProductAvailability = async (id: string, available: boolean) => {
     try {
-      const token = localStorage.getItem('adminToken');
-      
-      // Modo demonstração
-      if (token?.includes('demo-token')) {
-        const updatedProducts = products.map(p => 
-          p.id === id ? { ...p, available: !available } : p
-        );
-        setProducts(updatedProducts);
-        localStorage.setItem('demoProducts', JSON.stringify(updatedProducts));
-        console.log('✅ Disponibilidade alterada no modo demo');
-        return;
-      }
-      
-      const response = await fetch(`/api/products/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ available: !available }),
-      });
-      
-      if (response.ok) {
-        setProducts(prev => prev.map(p => 
-          p.id === id ? { ...p, available: !available } : p
-        ));
-      }
+      await api.updateProduct(id, { available: !available });
+      setProducts(prev => prev.map(p => 
+        p.id === id ? { ...p, available: !available } : p
+      ));
     } catch (error) {
       console.error('Erro ao atualizar produto:', error);
     }
@@ -735,8 +670,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   const filteredOrders = orderFilter === 'all' 
-    ? orders 
-    : orders.filter(o => o.status === orderFilter);
+    ? (orders || []) 
+    : (orders || []).filter(o => o.status === orderFilter);
 
   if (!config) {
     return (
@@ -819,6 +754,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </div>
             </button>
             <button
+              onClick={() => setActiveTab('categories')}
+              className={`py-4 px-2 border-b-2 font-medium transition ${
+                activeTab === 'categories'
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Tag className="w-5 h-5" />
+                Categorias
+              </div>
+            </button>
+            <button
               onClick={() => setActiveTab('config')}
               className={`py-4 px-2 border-b-2 font-medium transition ${
                 activeTab === 'config'
@@ -858,7 +806,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Total Pedidos</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.totalOrders}</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats?.totalOrders || 0}</p>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                     <ShoppingBag className="w-6 h-6 text-blue-600" />
@@ -871,7 +819,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Faturamento</p>
                     <p className="text-3xl font-bold text-gray-900">
-                      R$ {stats.totalRevenue.toFixed(2)}
+                      R$ {(stats?.totalRevenue || 0).toFixed(2)}
                     </p>
                   </div>
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -884,7 +832,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Pendentes</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.pendingOrders}</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats?.pendingOrders || 0}</p>
                   </div>
                   <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                     <Clock className="w-6 h-6 text-orange-600" />
@@ -977,7 +925,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </button>
               </div>
               <div className="space-y-3">
-                {orders.slice(0, 5).map(order => (
+                {(orders || []).slice(0, 5).map(order => (
                   <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                     onClick={() => {
                       setSelectedOrder(order);
@@ -1002,12 +950,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-gray-900">R$ {order.total.toFixed(2)}</p>
+                      <p className="font-bold text-gray-900">R$ {(order?.total || 0).toFixed(2)}</p>
                       <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                 ))}
-                {orders.length === 0 && (
+                {(orders || []).length === 0 && (
                   <div className="text-center text-gray-500 py-8">
                     <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-2" />
                     <p>Nenhum pedido registrado ainda</p>
@@ -1324,7 +1272,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xl font-bold text-orange-600">
-                        R$ {Number(product.price).toFixed(2)}
+                        R$ {Number(product?.price || 0).toFixed(2)}
                       </span>
                       <div className="flex gap-2">
                         <button
@@ -1348,6 +1296,78 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'categories' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">Gerenciar Categorias</h2>
+              <button
+                onClick={() => openCategoryModal()}
+                className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+              >
+                <Plus className="w-5 h-5" />
+                Nova Categoria
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categories.map((category) => {
+                const productCount = products.filter(p => p.categoryId === category.id).length;
+                return (
+                  <div key={category.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        {category.icon && (
+                          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <span className="text-lg">{category.icon}</span>
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{category.name}</h3>
+                          <p className="text-sm text-gray-500">/{category.slug}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <span className="text-sm text-gray-600">{productCount} produto(s)</span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openCategoryModal(category)}
+                          className="flex-1 flex items-center justify-center gap-2 p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(category.id)}
+                          className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {categories.length === 0 && (
+              <div className="text-center py-12">
+                <Tag className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma categoria encontrada</h3>
+                <p className="text-gray-600 mb-4">Crie sua primeira categoria para organizar seus produtos.</p>
+                <button
+                  onClick={() => openCategoryModal()}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+                >
+                  Criar Primeira Categoria
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1708,38 +1728,85 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             setShowProductModal(false);
             setEditingProduct(null);
           }}
-          onSave={(product) => {
-            // Modo demo - atualizar produtos localmente
-            const isDemoMode = localStorage.getItem('adminToken')?.includes('demo-token');
-            
-            if (isDemoMode) {
-              let updatedProducts;
-              if (editingProduct) {
-                // Editar produto existente
-                updatedProducts = products.map(p => p.id === product.id ? product : p);
-                console.log('✅ Produto editado no modo demo:', product);
-              } else {
-                // Adicionar novo produto
-                updatedProducts = [...products, product];
-                console.log('✅ Novo produto adicionado no modo demo:', product);
-              }
-              setProducts(updatedProducts);
-              // Sincronizar com localStorage para o cliente ver as mudanças
-              localStorage.setItem('demoProducts', JSON.stringify(updatedProducts));
-              setShowProductModal(false);
-              setEditingProduct(null);
-            } else {
-              // Modo real - recarregar da API
-              if (editingProduct) {
-                loadProducts();
-              } else {
-                loadProducts();
-              }
-            }
-          }}
+          onSave={handleSaveProduct}
           product={editingProduct}
           categories={categories}
         />
+      )}
+
+      {/* Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+              </h2>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Nome da Categoria
+                </label>
+                <input
+                  type="text"
+                  value={categoryForm.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                    setCategoryForm(prev => ({ ...prev, name, slug }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Ex: Hambúrgueres"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Slug (URL)
+                </label>
+                <input
+                  type="text"
+                  value={categoryForm.slug}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, slug: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Ex: hamburgueres"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Ícone (Emoji)
+                </label>
+                <input
+                  type="text"
+                  value={categoryForm.icon}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, icon: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Ex: 🍔"
+                  maxLength={2}
+                />
+              </div>
+            </div>
+            
+            <div className="border-t border-gray-200 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowCategoryModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveCategory}
+                disabled={!categoryForm.name || !categoryForm.slug}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+              >
+                {editingCategory ? 'Salvar' : 'Criar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Order Details Modal */}

@@ -50,17 +50,38 @@ export class CategoriaController {
   }
 
   async listPublic(req: Request, res: Response) {
-    const tenant = req.tenant;
+    try {
+      // Obter tenant do middleware ou buscar o primeiro ativo
+      let tenant = req.tenant;
+      
+      if (!tenant) {
+        // Para API pública sem tenantSlug específico, buscar primeiro tenant ativo
+        tenant = await prisma.tenant.findFirst({
+          where: { status: 'ACTIVE' },
+        });
+        
+        if (!tenant) {
+          tenant = await prisma.tenant.findFirst();
+        }
+      }
 
-    const categories = await prisma.category.findMany({
-      where: {
-        tenantId: tenant.id,
-        active: true,
-      },
-      orderBy: { order: 'asc' },
-    });
+      if (!tenant) {
+        return res.json([]);
+      }
 
-    return res.json(categories);
+      const categories = await prisma.category.findMany({
+        where: {
+          tenantId: tenant.id,
+          active: true,
+        },
+        orderBy: { order: 'asc' },
+      });
+
+      return res.json(categories);
+    } catch (error) {
+      console.error('❌ Erro ao listar categorias públicas:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
   }
 
   async update(req: Request, res: Response) {

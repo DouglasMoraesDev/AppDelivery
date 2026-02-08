@@ -6,10 +6,10 @@ import { uploadSingle } from '../middlewares/uploadMiddleware';
 const router = Router();
 const controller = new ConfiguracaoController();
 
-// Aplicar middleware de autenticação
+// Aplicar middleware de autenticação para rotas privadas
 router.use(autenticacaoMiddleware);
 
-// Rotas de configuração
+// Rotas de configuração autenticadas
 router.get('/', controller.getConfig);
 router.put('/', controller.updateConfig);
 router.post('/upload-image', uploadSingle, controller.uploadImage);

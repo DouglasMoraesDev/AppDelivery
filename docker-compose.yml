@@ -25,9 +25,9 @@ services:
       DATABASE_URL: mysql://gemini:gemini123@mysql:3306/gemini_burger
       JWT_SECRET: your-secret-key-change-in-production
       NODE_ENV: production
-      PORT: 3333
+      PORT: 4000
     ports:
-      - "3333:3333"
+      - "4000:4000"
     depends_on:
       - mysql
     networks:
@@ -39,9 +39,9 @@ services:
     container_name: gemini-frontend
     restart: always
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
-      VITE_API_URL: http://localhost:3333/api
+      VITE_API_URL: http://localhost:4000/api
     networks:
       - gemini-network
 

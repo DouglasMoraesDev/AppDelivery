@@ -7,9 +7,16 @@ import { categoriaRotas } from './categoriaRotas';
 import { clienteRotas } from './clienteRotas';
 import { analiticasRotas } from './analiticasRotas';
 import configuracaoRotas from './configuracaoRotas';
+import publicRoutes from './publicRoutes';
+import publicProductRoutes from './publicProductRoutes';
 
 const routes = Router();
 
+// Rotas públicas (sem autenticação)
+routes.use('/public', publicRoutes);
+routes.use('/public', publicProductRoutes);
+
+// Rotas autenticadas
 routes.use('/auth', autenticacaoRotas);
 routes.use('/tenants', tenantRotas);
 routes.use('/products', produtoRotas);

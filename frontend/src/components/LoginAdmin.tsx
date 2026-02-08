@@ -20,7 +20,35 @@ export default function LoginAdmin({ onLoginSuccess }: LoginAdminProps) {
     try {
       console.log('🔐 Tentando fazer login...', { email });
       
-      // Login de demonstração temporário (sem backend)
+      // Primeiro tentar login real com o backend
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Login real bem-sucedido:', data);
+          
+          // Salvar token real
+          localStorage.setItem('adminToken', data.token);
+          localStorage.setItem('adminUser', JSON.stringify(data.user));
+          
+          console.log('🚀 Login real completado');
+          onLoginSuccess();
+          return;
+        } else {
+          console.log('⚠️ Login real falhou, tentando demo...');
+        }
+      } catch (backendError) {
+        console.log('⚠️ Backend indisponível, usando demo:', backendError);
+      }
+      
+      // Fallback para login de demonstração
       if (email === 'admin@demo.com' && password === 'demo123') {
         console.log('✅ Login de demonstração aceito');
         const mockData = {
@@ -31,38 +59,14 @@ export default function LoginAdmin({ onLoginSuccess }: LoginAdminProps) {
         localStorage.setItem('adminToken', mockData.token);
         localStorage.setItem('adminUser', JSON.stringify(mockData.user));
         
-        console.log('💾 Dados salvos no localStorage');
-        console.log('🚀 Chamando onLoginSuccess...');
+        console.log('🚀 Login demo completado');
         onLoginSuccess();
         return;
       }
       
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      console.log('📡 Resposta recebida:', response.status, response.statusText);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Erro na resposta:', errorData);
-        throw new Error(errorData.message || 'Credenciais inválidas');
-      }
-
-      const data = await response.json();
-      console.log('✅ Login bem-sucedido:', data);
+      // Se chegou até aqui, credenciais inválidas
+      setError('Credenciais inválidas. Tente admin@demo.com / demo123 para o modo demo.');
       
-      // Salvar token no localStorage
-      localStorage.setItem('adminToken', data.token);
-      localStorage.setItem('adminUser', JSON.stringify(data.user));
-      
-      console.log('💾 Dados salvos no localStorage');
-      console.log('🚀 Chamando onLoginSuccess...');
-      onLoginSuccess();
     } catch (err) {
       console.error('❌ Erro no login:', err);
       setError(err instanceof Error ? err.message : 'Erro ao fazer login');
@@ -80,6 +84,13 @@ export default function LoginAdmin({ onLoginSuccess }: LoginAdminProps) {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Painel Admin</h1>
           <p className="text-gray-600">Entre com suas credenciais</p>
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-700 font-medium mb-2">💡 Credenciais disponíveis:</p>
+            <div className="text-xs text-blue-600 space-y-1">
+              <p><strong>Admin Real:</strong> admin@geminiburger.com / admin123</p>
+              <p><strong>Demo:</strong> admin@demo.com / demo123</p>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -158,11 +169,9 @@ export default function LoginAdmin({ onLoginSuccess }: LoginAdminProps) {
           </p>
         </div>
 
-        <div className="mt-4 text-center text-sm text-gray-600">
-          <p>Esqueceu sua senha?</p>
-          <button className="text-orange-600 hover:text-orange-700 font-medium mt-1">
-            Recuperar acesso
-          </button>
+        <div className="mt-6 text-center text-sm text-gray-500">
+          <p>O backend tentará conectar automaticamente.<br/>
+          Em caso de erro, o modo demo será ativado.</p>
         </div>
       </div>
     </div>

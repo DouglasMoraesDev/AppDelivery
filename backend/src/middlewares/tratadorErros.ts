@@ -16,6 +16,33 @@ export function tratadorErros(
   res: Response,
   next: NextFunction
 ) {
+  console.error(`❌ Erro em ${req.method} ${req.path}:`, error);
+  console.error('   Erro type:', error.constructor.name);
+  console.error('   Erro message:', error.message);
+
+  // Erros do Multer (upload)
+  if (error.name === 'MulterError') {
+    const multerError = error as any;
+    console.error('   Multer error code:', multerError.code);
+    
+    if (multerError.code === 'FILE_TOO_LARGE') {
+      return res.status(413).json({
+        error: 'Arquivo muito grande. Máximo 2MB.',
+      });
+    }
+    
+    if (multerError.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        error: 'Apenas um arquivo é permitido.',
+      });
+    }
+
+    return res.status(400).json({
+      error: 'Erro no upload do arquivo.',
+      details: multerError.message,
+    });
+  }
+
   if (error instanceof ErroApp) {
     return res.status(error.statusCode).json({
       error: error.message,
@@ -33,5 +60,7 @@ export function tratadorErros(
   
   return res.status(500).json({
     error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
   });
 }

@@ -34,4 +34,5 @@ export interface OrderDetails {
   cardName?: string;
   cashValue?: string;
   needsChange?: boolean;
+  notes?: string;
 }

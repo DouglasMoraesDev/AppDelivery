@@ -6,15 +6,15 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: 3000,
+        port: 3001,
         host: '0.0.0.0',
         proxy: {
           '/api': {
-            target: 'http://localhost:3333',
+            target: 'http://localhost:4000',
             changeOrigin: true,
           },
           '/uploads': {
-            target: 'http://localhost:3333',
+            target: 'http://localhost:4000',
             changeOrigin: true,
           }
         }

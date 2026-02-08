@@ -133,7 +133,7 @@ export class PedidoController {
   }
 
   async list(req: Request, res: Response) {
-    const tenantId = req.tenantId!;
+    const tenantId = req.user!.tenantId;
     const { status, startDate, endDate } = req.query;
 
     const orders = await prisma.order.findMany({
@@ -165,7 +165,7 @@ export class PedidoController {
 
   async getById(req: Request, res: Response) {
     const { id } = req.params;
-    const tenantId = req.tenantId!;
+    const tenantId = req.user!.tenantId;
 
     const order = await prisma.order.findFirst({
       where: {
@@ -194,7 +194,7 @@ export class PedidoController {
     const { status } = z.object({
       status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'DELIVERED', 'CANCELLED']),
     }).parse(req.body);
-    const tenantId = req.tenantId!;
+    const tenantId = req.user!.tenantId;
 
     const order = await prisma.order.findFirst({
       where: { id, tenantId },
@@ -227,7 +227,7 @@ export class PedidoController {
 
   async cancel(req: Request, res: Response) {
     const { id } = req.params;
-    const tenantId = req.tenantId!;
+    const tenantId = req.user!.tenantId;
 
     const order = await prisma.order.findFirst({
       where: { id, tenantId },

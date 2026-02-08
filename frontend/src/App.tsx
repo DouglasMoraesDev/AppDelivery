@@ -4,6 +4,7 @@ import { ShoppingCart, X, MessageSquare, MapPin, CreditCard, Star, Trash2, Plus,
 import { MENU_ITEMS, WHATSAPP_NUMBER } from './constants';
 import { Product, CartItem, OrderDetails, PaymentMethod } from './types';
 import { getAIRecommendation } from './services/geminiService';
+import { getPublicProducts, getPublicCategories, getPublicConfig } from './services/api';
 import QRCode from 'qrcode';
 
 export default function App() {
@@ -26,20 +27,31 @@ export default function App() {
   const [needsChange, setNeedsChange] = useState(false);
   
   // Carregar configurações do admin
-  const [appConfig, setAppConfig] = useState<any>(() => {
-    const demoConfig = localStorage.getItem('demoConfig');
-    if (demoConfig) {
-      try {
-        return JSON.parse(demoConfig);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [appConfig, setAppConfig] = useState<any>(null);
   
   // Atualizar configurações quando localStorage mudar
   useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await getPublicConfig();
+        setAppConfig(config);
+      } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
+        // Fallback para localStorage em caso de erro
+        const demoConfig = localStorage.getItem('demoConfig');
+        if (demoConfig) {
+          try {
+            setAppConfig(JSON.parse(demoConfig));
+          } catch (e) {
+            setAppConfig(null);
+          }
+        }
+      }
+    };
+    
+    loadConfig();
+    
+    // Escutar mudanças no localStorage para modo demo
     const handleConfigChange = () => {
       const demoConfig = localStorage.getItem('demoConfig');
       if (demoConfig) {
@@ -75,65 +87,116 @@ export default function App() {
     return map[categoryId] || 'burgers';
   };
   
-  // Carregar produtos do admin se existirem
-  const [menuItems, setMenuItems] = useState<Product[]>(() => {
-    const demoProducts = localStorage.getItem('demoProducts');
-    if (demoProducts) {
+  // Carregar produtos do backend
+  const [menuItems, setMenuItems] = useState<Product[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [dynamicCategories, setDynamicCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadProductsAndCategories = async () => {
+      setIsLoadingProducts(true);
       try {
-        const parsedProducts = JSON.parse(demoProducts);
-        console.log('✅ Produtos carregados do localStorage:', parsedProducts.length);
+        // Carregar categorias
+        const categories = await getPublicCategories();
+        setDynamicCategories(categories);
+        console.log('✅ Categorias carregadas do backend:', categories);
+
+        // Carregar produtos
+        const products = await getPublicProducts();
         // Converter formato do admin para formato do cliente
-        return parsedProducts.map((p: any) => ({
+        const formattedProducts = products.map((p: any) => ({
           id: p.id,
           name: p.name,
           description: p.description,
-          price: p.price,
-          category: getCategorySlugById(p.categoryId),
-          image: p.image,
-          tags: []
+          price: Number(p.price),
+          category: p.category?.slug || getCategorySlugById(p.categoryId),
+          image: p.image || '',
+          tags: p.tags || []
         }));
-      } catch (e) {
-        console.error('❌ Erro ao carregar produtos:', e);
-        return MENU_ITEMS;
+        setMenuItems(formattedProducts);
+        console.log('✅ Produtos carregados do backend:', formattedProducts.length);
+      } catch (error) {
+        console.error('❌ Erro ao carregar produtos do backend:', error);
+        // Fallback para dados do localStorage ou constantes
+        const demoProducts = localStorage.getItem('demoProducts');
+        const demoCategories = localStorage.getItem('demoCategories');
+        
+        if (demoCategories) {
+          try {
+            const parsedCategories = JSON.parse(demoCategories);
+            setDynamicCategories(parsedCategories);
+          } catch (e) {
+            console.error('❌ Erro ao carregar categorias do localStorage:', e);
+          }
+        }
+        
+        if (demoProducts) {
+          try {
+            const parsedProducts = JSON.parse(demoProducts);
+            console.log('🔄 Usando produtos do localStorage como fallback');
+            const formattedProducts = parsedProducts.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              description: p.description,
+              price: Number(p.price),
+              category: p.category?.slug || getCategorySlugById(p.categoryId),
+              image: p.image || '',
+              tags: []
+            }));
+            setMenuItems(formattedProducts);
+          } catch (e) {
+            console.error('❌ Erro ao carregar produtos do localStorage:', e);
+            setMenuItems(MENU_ITEMS);
+          }
+        } else {
+          console.log('⚠️ Usando MENU_ITEMS como fallback');
+          setMenuItems(MENU_ITEMS);
+        }
+      } finally {
+        setIsLoadingProducts(false);
       }
-    }
-    console.log('⚠️ Nenhum produto no localStorage, usando MENU_ITEMS');
-    return MENU_ITEMS;
-  });
-  
-  // Atualizar menuItems quando localStorage mudar
-  useEffect(() => {
+    };
+
+    loadProductsAndCategories();
+    
+    // Escutar mudanças no localStorage para modo demo
     const handleStorageChange = () => {
       const demoProducts = localStorage.getItem('demoProducts');
+      const demoCategories = localStorage.getItem('demoCategories');
+      
+      if (demoCategories) {
+        try {
+          const parsedCategories = JSON.parse(demoCategories);
+          setDynamicCategories(parsedCategories);
+        } catch (e) {
+          console.error('❌ Erro ao atualizar categorias:', e);
+        }
+      }
+      
       if (demoProducts) {
         try {
           const parsedProducts = JSON.parse(demoProducts);
-          const converted = parsedProducts.map((p: any) => ({
+          const formattedProducts = parsedProducts.map((p: any) => ({
             id: p.id,
             name: p.name,
             description: p.description,
-            price: p.price,
-            category: getCategorySlugById(p.categoryId),
-            image: p.image,
+            price: Number(p.price),
+            category: p.category?.slug || getCategorySlugById(p.categoryId),
+            image: p.image || '',
             tags: []
           }));
-          setMenuItems(converted);
+          setMenuItems(formattedProducts);
+          console.log('🔄 Produtos atualizados do localStorage');
         } catch (e) {
-          console.error('Erro ao carregar produtos:', e);
+          console.error('❌ Erro ao atualizar produtos:', e);
         }
       }
     };
     
     window.addEventListener('storage', handleStorageChange);
     
-    // Verificar a cada 2 segundos se houve mudança
-    const interval = setInterval(() => {
-      handleStorageChange();
-    }, 2000);
-    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
     };
   }, []);
 
@@ -364,7 +427,7 @@ Aguardando confirmação!`.trim();
     setShowCashModal(false);
   };
 
-  const categories = [
+  const staticCategories = [
     { id: 'all', label: 'Todos', icon: null },
     { id: 'combos', label: 'Combos', icon: <Package size={16}/> },
     { id: 'burgers', label: 'Hambúrgueres', icon: null },
@@ -373,6 +436,18 @@ Aguardando confirmação!`.trim();
     { id: 'alcohol', label: 'Bebidas Alcoólicas', icon: <Beer size={16}/> },
     { id: 'desserts', label: 'Sobremesas', icon: null },
   ];
+
+  // Usar categorias dinâmicas se disponível, senão usar estáticas
+  const categories = dynamicCategories.length > 0 
+    ? [
+        { id: 'all', label: 'Todos', icon: null },
+        ...dynamicCategories.map(cat => ({
+          id: cat.slug,
+          label: cat.name,
+          icon: null
+        }))
+      ]
+    : staticCategories;
 
   return (
     <div className="min-h-screen pb-20 bg-zinc-950">

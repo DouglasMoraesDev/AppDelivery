@@ -60,13 +60,26 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
   }, [product, isOpen, categories]);
 
   const handleImageUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const imageUrl = reader.result as string;
-      setImagePreview(imageUrl);
-      setFormData({ ...formData, image: imageUrl });
-    };
-    reader.readAsDataURL(file);
+    // Limitar tamanho da imagem a 2MB
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+    
+    if (file.size > MAX_SIZE) {
+      alert('A imagem é muito grande. Máximo 2MB.');
+      return;
+    }
+    
+    // Validar tipo de arquivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione uma imagem válida (PNG, JPG, etc)');
+      return;
+    }
+    
+    // Criar preview da imagem usando URL de objeto
+    const imageUrl = URL.createObjectURL(file);
+    setImagePreview(imageUrl);
+    
+    // Armazenar arquivo para envio posterior
+    setFormData({ ...formData, image: file as any });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,6 +87,31 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
     setIsLoading(true);
 
     try {
+      // Validar dados antes de enviar
+      if (!formData.name.trim()) {
+        alert('Nome do produto é obrigatório');
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!formData.description.trim()) {
+        alert('Descrição é obrigatória');
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!formData.price || formData.price <= 0) {
+        alert('Preço deve ser maior que 0');
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!formData.categoryId) {
+        alert('Categoria é obrigatória');
+        setIsLoading(false);
+        return;
+      }
+      
       const token = localStorage.getItem('adminToken');
       
       // Modo demonstração - simular salvamento
@@ -82,7 +120,11 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
         await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
         
         const savedProduct = {
-          ...formData,
+          name: formData.name,
+          description: formData.description,
+          price: Number(formData.price),
+          categoryId: formData.categoryId,
+          available: formData.available,
           id: product?.id || `demo-${Date.now()}`,
           image: imagePreview || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=800'
         };
@@ -93,28 +135,54 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
         return;
       }
       
+      // Preparar FormData para envio com arquivo
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name.trim());
+      formDataToSend.append('description', formData.description.trim());
+      formDataToSend.append('price', String(formData.price));
+      formDataToSend.append('categoryId', formData.categoryId);
+      formDataToSend.append('available', String(formData.available));
+      
+      // Adicionar arquivo de imagem se selecionado
+      if (formData.image && formData.image instanceof File) {
+        formDataToSend.append('image', formData.image);
+      }
+      
+      // Adicionar campos opcionais
+      if (formData.calories) {
+        formDataToSend.append('calories', String(formData.calories));
+      }
+      if (formData.stock !== undefined) {
+        formDataToSend.append('stock', String(formData.stock));
+      }
+      
+      console.log('📤 Enviando produto com arquivo...');
+      
       const url = product?.id ? `/api/products/${product.id}` : '/api/products';
       const method = product?.id ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          // NÃO definir Content-Type para FormData - browser faz isso automaticamente
         },
-        body: JSON.stringify(formData),
+        body: formDataToSend,
       });
 
       if (response.ok) {
         const savedProduct = await response.json();
+        console.log('✅ Produto salvo com sucesso:', savedProduct);
         onSave(savedProduct);
         onClose();
       } else {
-        alert('Erro ao salvar produto');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Erro ao salvar:', response.status, errorData);
+        alert(`Erro ao salvar produto: ${errorData.message || response.status}`);
       }
     } catch (error) {
-      console.error('Erro ao salvar produto:', error);
-      alert('Erro ao salvar produto');
+      console.error('❌ Erro ao salvar produto:', error);
+      alert(`Erro ao salvar produto: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsLoading(false);
     }
@@ -233,9 +301,13 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
                 type="number"
                 id="price"
                 step="0.01"
-                min="0"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                min="0.01"
+                value={formData.price || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const numValue = value ? parseFloat(value) : 0;
+                  setFormData({ ...formData, price: isNaN(numValue) ? 0 : numValue });
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                 placeholder="0.00"
                 required
@@ -273,7 +345,11 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
                 id="calories"
                 min="0"
                 value={formData.calories || ''}
-                onChange={(e) => setFormData({ ...formData, calories: e.target.value ? parseInt(e.target.value) : undefined })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const numValue = value ? parseInt(value) : undefined;
+                  setFormData({ ...formData, calories: numValue && !isNaN(numValue) ? numValue : undefined });
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                 placeholder="Ex: 650"
               />
@@ -288,7 +364,11 @@ export default function ProductModal({ isOpen, onClose, onSave, product, categor
                 id="stock"
                 min="0"
                 value={formData.stock || ''}
-                onChange={(e) => setFormData({ ...formData, stock: e.target.value ? parseInt(e.target.value) : undefined })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const numValue = value ? parseInt(value) : undefined;
+                  setFormData({ ...formData, stock: numValue && !isNaN(numValue) ? numValue : undefined });
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                 placeholder="Ex: 50"
               />
