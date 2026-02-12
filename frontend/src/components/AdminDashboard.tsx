@@ -565,22 +565,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const handleSaveProduct = async (product: Product) => {
     try {
-      console.log('💾 Salvando produto:', product);
+      console.log('💾 Produto salvo (callback do modal):', product);
       
+      // O ProductModal já fez a chamada API e retorna o produto salvo
+      // Aqui apenas atualizamos o estado local
       if (editingProduct) {
         // Editando produto existente
-        console.log('✏️ Editando produto existente:', editingProduct.id);
-        const updatedProduct = await api.updateProduct(editingProduct.id, product);
+        console.log('✏️ Atualizando produto na lista:', product.id);
         setProducts(prev => prev.map(p => 
-          p.id === editingProduct.id ? updatedProduct : p
+          p.id === product.id ? product : p
         ));
-        console.log('✅ Produto editado com sucesso');
       } else {
         // Adicionando novo produto
-        console.log('➕ Adicionando novo produto');
-        const newProduct = await api.createProduct(product);
-        setProducts(prev => [...prev, newProduct]);
-        console.log('✅ Produto criado com sucesso');
+        console.log('➕ Adicionando produto na lista:', product.id);
+        setProducts(prev => [...prev, product]);
       }
       
       setShowProductModal(false);
@@ -589,8 +587,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       // Atualizar stats
       setStats(prev => ({ ...prev, totalProducts: products.length + (editingProduct ? 0 : 1) }));
     } catch (error) {
-      console.error('❌ Erro ao salvar produto:', error);
-      alert(`Erro ao salvar produto: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      console.error('❌ Erro ao processar produto:', error);
+      alert(`Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   };
 

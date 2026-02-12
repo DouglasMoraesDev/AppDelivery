@@ -30,17 +30,59 @@ const createProductSchema = z.object({
   }).optional(),
   ingredients: z.union([z.array(z.string()), z.undefined()]).optional(),
   allergens: z.union([z.array(z.string()), z.undefined()]).optional(),
-});
+}).passthrough(); // Permite campos extras mas não os usa
 
 export class ProdutoController {
   async create(req: Request & { file?: Express.Multer.File }, res: Response) {
     try {
       console.log('📸 Criando produto...');
       console.log('📦 Body recebido:', JSON.stringify(req.body, null, 2));
+      console.log('� Body keys:', Object.keys(req.body));
       console.log('📄 Arquivo:', req.file ? `${req.file.filename}` : 'nenhum arquivo');
+      console.log('🔑 Headers:', req.headers);
+      console.log('👤 User:', req.user);
 
-      const data = createProductSchema.parse(req.body);
-      console.log('✅ Schema validado:', JSON.stringify(data, null, 2));
+      // Processar arrays que podem vir como strings no FormData
+      const bodyData = { ...req.body };
+      if (typeof bodyData.tags === 'string') {
+        try {
+          bodyData.tags = JSON.parse(bodyData.tags);
+        } catch {
+          bodyData.tags = bodyData.tags.split(',').map((t: string) => t.trim());
+        }
+      }
+      if (typeof bodyData.ingredients === 'string') {
+        try {
+          bodyData.ingredients = JSON.parse(bodyData.ingredients);
+        } catch {
+          bodyData.ingredients = bodyData.ingredients.split(',').map((t: string) => t.trim());
+        }
+      }
+      if (typeof bodyData.allergens === 'string') {
+        try {
+          bodyData.allergens = JSON.parse(bodyData.allergens);
+        } catch {
+          bodyData.allergens = bodyData.allergens.split(',').map((t: string) => t.trim());
+        }
+      }
+
+      const validated = createProductSchema.parse(bodyData);
+      
+      // Extrair apenas os campos do schema (sem campos extras)
+      const data = {
+        name: validated.name,
+        description: validated.description,
+        price: validated.price,
+        categoryId: validated.categoryId,
+        available: validated.available,
+        ...(validated.tags && { tags: validated.tags }),
+        ...(validated.stock !== undefined && { stock: validated.stock }),
+        ...(validated.calories !== undefined && { calories: validated.calories }),
+        ...(validated.ingredients && { ingredients: validated.ingredients }),
+        ...(validated.allergens && { allergens: validated.allergens }),
+      };
+      
+      console.log('✅ Schema validado e filtrado');
 
       const tenantId = req.user!.tenantId;
 
@@ -71,12 +113,18 @@ export class ProdutoController {
       console.log('✅ Produto criado com sucesso:', product.id);
       return res.status(201).json(product);
     } catch (error) {
-      console.error('❌ Erro ao criar produto:', error);
+      console.error('❌ Erro ao criar produto:');
+      if (error instanceof Error) {
+        console.error('   Message:', error.message);
+      }
       if (error instanceof z.ZodError) {
-        console.error('❌ Erro de validação:', error.errors);
+        console.error('❌ Erro de validação:', JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ error: 'Validação falhou', details: error.errors });
       }
-      return res.status(500).json({ error: String(error) });
+      return res.status(500).json({ 
+        error: 'Erro ao criar produto',
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 
